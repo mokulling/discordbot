@@ -1,64 +1,70 @@
+import 'dotenv/config';
 import express from 'express';
 import {
   InteractionType,
   InteractionResponseType,
-  InteractionResponseFlags,
   MessageComponentTypes,
   ButtonStyleTypes,
 } from 'discord-interactions';
-import { VerifyDiscordRequest, getRandomEmoji, DiscordRequest } from './utils.js';
+import { VerifyDiscordRequest } from './utils.js';
 
-// Create an express app
+// Create and configure express app
 const app = express();
-// Get port, or default to 3000
-const PORT = process.env.PORT || 3000;
-// Parse request body and verifies incoming requests using discord-interactions package
 app.use(express.json({ verify: VerifyDiscordRequest(process.env.PUBLIC_KEY) }));
 
-// Store for in-progress games. In production, you'd want to use a DB
-const activeGames = {};
-
-/**
- * Interactions endpoint URL where Discord will send HTTP requests
- */
-app.post('/interactions', async function (req, res) {
+app.post('/interactions', function (req, res) {
   // Interaction type and data
-  const { type, id, data } = req.body;
-
-  /**
-   * Handle verification requests
-   */
-  if (type === InteractionType.PING) {
-    return res.send({ type: InteractionResponseType.PONG });
-  }
-
+  const { type, data } = req.body;
   /**
    * Handle slash command requests
-   * See https://discord.com/developers/docs/interactions/application-commands#slash-commands
    */
   if (type === InteractionType.APPLICATION_COMMAND) {
-    const { name } = data;
-
-    // "test" guild command
-    if (name === 'test') {
-      // Send a message into the channel where command was triggered from
+    // Slash command with name of "test"
+    if (data.name === 'test') {
+      // Send a message with a button
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          // Fetches a random emoji to send from a helper function
-          content: 'hello world ' + getRandomEmoji(),
+          content: 'A message with a button',
+          // Buttons are inside of action rows
+          components: [
+            {
+              type: MessageComponentTypes.ACTION_ROW,
+              components: [
+                {
+                  type: MessageComponentTypes.BUTTON,
+                  // Value for your app to identify the button
+                  custom_id: 'my_button',
+                  label: 'Click',
+                  style: ButtonStyleTypes.PRIMARY,
+                },
+              ],
+            },
+          ],
         },
+      });
+    }
+  }
+
+  /**
+   * Handle requests from interactive components
+   */
+  if (type === InteractionType.MESSAGE_COMPONENT) {
+    // custom_id set in payload when sending message component
+    const componentId = data.custom_id;
+    // user who clicked button
+    const userId = req.body.member.user.id;
+
+    if (componentId === 'my_button') {
+      console.log(req.body);
+      return res.send({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { content: `<@${userId} clicked the button` },
       });
     }
   }
 });
 
-app.listen(PORT, () => {
-  console.log('Listening on port', PORT);
-
-  // Check if guild commands from commands.json are installed (if not, install them)
-  HasGuildCommands(process.env.APP_ID, process.env.GUILD_ID, [
-    TEST_COMMAND,
-    CHALLENGE_COMMAND,
-  ]);
+app.listen(3000, () => {
+  console.log('Listening on port 3000');
 });
